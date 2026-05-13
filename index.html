@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Eyes-con — Eye Tracking Cursor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d0f16;
+        --panel: #161a26;
+        --card: #1f2433;
+        --card-hover: #2b3146;
+        --text: #e9ecf2;
+        --muted: #a1a8b5;
+        --accent: #7b9dff;
+        --accent-strong: #9bb4ff;
+        --success: #4cd2a5;
+        --danger: #ff6b6b;
+        --ring: rgba(123, 157, 255, 0.45);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      }
+
+      body {
+        min-height: 100vh;
+        background: radial-gradient(circle at top, #1b2032, var(--bg));
+        color: var(--text);
+        display: flex;
+        justify-content: center;
+        padding: 32px 20px 80px;
+      }
+
+      #app {
+        width: min(1100px, 100%);
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      header {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      header h1 {
+        font-size: clamp(28px, 3vw, 38px);
+        font-weight: 700;
+      }
+
+      header p {
+        color: var(--muted);
+        max-width: 620px;
+        font-size: 0.98rem;
+      }
+
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #0b1020;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 999px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.2s ease;
+      }
+
+      button.primary:hover {
+        background: var(--accent-strong);
+        transform: translateY(-2px);
+      }
+
+      button.secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid #2a3144;
+        padding: 9px 16px;
+        border-radius: 999px;
+        cursor: pointer;
+      }
+
+      #status {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .card-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 18px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid #2a3144;
+        padding: 24px 20px;
+        border-radius: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        text-align: left;
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease;
+      }
+
+      .card:hover,
+      .card.active {
+        background: var(--card-hover);
+        border-color: var(--accent);
+        transform: translateY(-4px);
+      }
+
+      .card span {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      #cursor {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 54px;
+        height: 54px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 999;
+        display: grid;
+        place-items: center;
+      }
+
+      #cursor svg {
+        position: absolute;
+        width: 54px;
+        height: 54px;
+        transform: rotate(-90deg);
+      }
+
+      #cursor .ring-bg {
+        stroke: rgba(255, 255, 255, 0.08);
+      }
+
+      #cursor .ring-fg {
+        stroke: var(--accent);
+        transition: stroke 0.15s ease;
+      }
+
+      #cursor .dot {
+        width: 14px;
+        height: 14px;
+        background: var(--accent);
+        border-radius: 999px;
+        box-shadow: 0 0 16px rgba(123, 157, 255, 0.8);
+        transition: transform 0.1s ease, background 0.2s ease;
+      }
+
+      #cursor.blink-active .dot {
+        background: var(--success);
+        transform: scale(1.2);
+      }
+
+      #calibration {
+        position: fixed;
+        inset: 0;
+        background: rgba(8, 10, 18, 0.88);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 998;
+        color: var(--text);
+      }
+
+      #calibration.hidden {
+        display: none;
+      }
+
+      #calibration .overlay {
+        position: relative;
+        width: min(800px, 90vw);
+        height: min(460px, 60vh);
+        border: 1px solid #2a3144;
+        border-radius: 22px;
+        background: rgba(15, 18, 28, 0.9);
+        padding: 24px;
+      }
+
+      #calibration .prompt {
+        font-size: 1rem;
+        margin-bottom: 16px;
+        color: var(--muted);
+      }
+
+      #calibration-point {
+        position: absolute;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--accent);
+        box-shadow: 0 0 18px rgba(123, 157, 255, 0.9);
+        transform: translate(-50%, -50%);
+      }
+
+      #debug {
+        position: fixed;
+        right: 16px;
+        bottom: 16px;
+        width: 200px;
+        max-width: 45vw;
+        aspect-ratio: 4 / 3;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #2a3144;
+        background: #0c0f1b;
+        display: grid;
+      }
+
+      #debug video,
+      #debug canvas {
+        width: 100%;
+        height: 100%;
+        grid-area: 1 / 1;
+        object-fit: cover;
+      }
+
+      @media (max-width: 600px) {
+        body {
+          padding: 24px 16px 110px;
+        }
+
+        #debug {
+          width: 150px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Eyes-con Cursor Control</h1>
+        <p>
+          Control the cursor with your eyes and trigger clicks by holding a blink. Keep the
+          calibration overlay open and follow each point to boost accuracy.
+        </p>
+      </header>
+
+      <div id="controls">
+        <button id="startButton" class="primary">Start Camera</button>
+        <button id="recalibrateButton" class="secondary">Recalibrate</button>
+        <span id="status">Waiting for camera permission.</span>
+      </div>
+
+      <section class="card-grid">
+        <button class="card" data-action="home">
+          <h3>Home</h3>
+          <span>Overview of the workspace</span>
+        </button>
+        <button class="card" data-action="profile">
+          <h3>Profile</h3>
+          <span>Manage your presence</span>
+        </button>
+        <button class="card" data-action="settings">
+          <h3>Settings</h3>
+          <span>Fine-tune the experience</span>
+        </button>
+        <button class="card" data-action="enter">
+          <h3>Enter</h3>
+          <span>Launch the flow</span>
+        </button>
+      </section>
+    </div>
+
+    <div id="cursor" aria-hidden="true">
+      <svg viewBox="0 0 54 54">
+        <circle class="ring-bg" cx="27" cy="27" r="24" stroke-width="3" fill="none" />
+        <circle class="ring-fg" cx="27" cy="27" r="24" stroke-width="3" fill="none" />
+      </svg>
+      <div class="dot"></div>
+    </div>
+
+    <div id="calibration">
+      <div class="overlay">
+        <div class="prompt" id="calibrationText">
+          Look at the highlighted point until it locks in.
+        </div>
+        <div id="calibration-point"></div>
+      </div>
+    </div>
+
+    <div id="debug">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="debugCanvas"></canvas>
+    </div>
+
+    <script type="module">
+      import { FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("debugCanvas");
+      const ctx = canvas.getContext("2d");
+      const cursor = document.getElementById("cursor");
+      const ring = cursor.querySelector(".ring-fg");
+      const statusEl = document.getElementById("status");
+      const startButton = document.getElementById("startButton");
+      const recalibrateButton = document.getElementById("recalibrateButton");
+      const calibrationEl = document.getElementById("calibration");
+      const calibrationPoint = document.getElementById("calibration-point");
+      const calibrationText = document.getElementById("calibrationText");
+      const cards = Array.from(document.querySelectorAll(".card"));
+
+      const RING_CIRCUMFERENCE = 2 * Math.PI * 24;
+      ring.style.strokeDasharray = `${RING_CIRCUMFERENCE}`;
+      ring.style.strokeDashoffset = `${RING_CIRCUMFERENCE}`;
+
+      // Blink detection sensitivity threshold. Lower = more sensitive (may cause false clicks).
+      const BLINK_EAR_THRESHOLD = 0.22;
+      // Blink hold time in milliseconds to confirm an intentional click.
+      const BLINK_HOLD_MS = 250;
+      // Cursor smoothing factor. Higher = faster response, lower = smoother movement.
+      const SMOOTHING_ALPHA = 0.18;
+      // Movement sensitivity multiplier. Higher = larger on-screen movement.
+      const MOVEMENT_SENSITIVITY = 1.25;
+
+      const calibrationPoints = [
+        { x: 0.1, y: 0.1, label: "Top left" },
+        { x: 0.9, y: 0.1, label: "Top right" },
+        { x: 0.5, y: 0.5, label: "Center" },
+        { x: 0.1, y: 0.9, label: "Bottom left" },
+        { x: 0.9, y: 0.9, label: "Bottom right" },
+      ];
+
+      let faceLandmarker;
+      let running = false;
+      let smoothed = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      let blinkStart = null;
+      let blinkTriggered = false;
+      let blinkCooldownUntil = 0;
+      let calibrationStep = 0;
+      let calibrationActive = true;
+      let calibrationSamples = null;
+      let calibrationBounds = null;
+
+      const EYE_INDEXES = {
+        left: [33, 160, 158, 133, 153, 144],
+        right: [362, 385, 387, 263, 373, 380],
+      };
+
+      const IRIS_INDEXES = {
+        left: [468, 469, 470, 471, 472],
+        right: [473, 474, 475, 476, 477],
+      };
+
+      const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+      const earForEye = (landmarks, indexes) => {
+        const [p1, p2, p3, p4, p5, p6] = indexes.map((i) => landmarks[i]);
+        const vertical = distance(p2, p6) + distance(p3, p5);
+        const horizontal = distance(p1, p4);
+        return vertical / (2 * horizontal);
+      };
+
+      const irisCenter = (landmarks, indexes) => {
+        const points = indexes.map((i) => landmarks[i]);
+        const sum = points.reduce(
+          (acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }),
+          { x: 0, y: 0 },
+        );
+        return { x: sum.x / points.length, y: sum.y / points.length };
+      };
+
+      const updateCursor = (targetX, targetY) => {
+        smoothed.x = SMOOTHING_ALPHA * targetX + (1 - SMOOTHING_ALPHA) * smoothed.x;
+        smoothed.y = SMOOTHING_ALPHA * targetY + (1 - SMOOTHING_ALPHA) * smoothed.y;
+        cursor.style.left = `${smoothed.x}px`;
+        cursor.style.top = `${smoothed.y}px`;
+      };
+
+      const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+      const mapToScreen = (iris) => {
+        if (!calibrationBounds) {
+          return {
+            x: iris.x * window.innerWidth,
+            y: iris.y * window.innerHeight,
+          };
+        }
+        const nx = (iris.x - calibrationBounds.minX) / (calibrationBounds.maxX - calibrationBounds.minX);
+        const ny = (iris.y - calibrationBounds.minY) / (calibrationBounds.maxY - calibrationBounds.minY);
+        const adjustedX = clamp((nx - 0.5) * MOVEMENT_SENSITIVITY + 0.5, 0, 1);
+        const adjustedY = clamp((ny - 0.5) * MOVEMENT_SENSITIVITY + 0.5, 0, 1);
+        return {
+          x: adjustedX * window.innerWidth,
+          y: adjustedY * window.innerHeight,
+        };
+      };
+
+      const setRingProgress = (progress) => {
+        const offset = RING_CIRCUMFERENCE * (1 - progress);
+        ring.style.strokeDashoffset = `${offset}`;
+      };
+
+      const triggerClick = () => {
+        const target = document.elementFromPoint(smoothed.x, smoothed.y);
+        if (target) {
+          target.classList.add("active");
+          target.click();
+          setTimeout(() => target.classList.remove("active"), 300);
+        }
+      };
+
+      const drawDebug = (landmarks, irisLeft, irisRight) => {
+        if (!video.videoWidth) return;
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "rgba(123, 157, 255, 0.8)";
+        const drawPoint = (point, size = 4) => {
+          ctx.beginPath();
+          ctx.arc(point.x * canvas.width, point.y * canvas.height, size, 0, Math.PI * 2);
+          ctx.fill();
+        };
+        drawPoint(irisLeft, 4);
+        drawPoint(irisRight, 4);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        [EYE_INDEXES.left[0], EYE_INDEXES.right[0]].forEach((index) => drawPoint(landmarks[index], 2.5));
+      };
+
+      const updateCalibrationUI = () => {
+        const step = calibrationPoints[calibrationStep];
+        calibrationText.textContent = `Calibration: Look at ${step.label}`;
+        calibrationPoint.style.left = `${step.x * 100}%`;
+        calibrationPoint.style.top = `${step.y * 100}%`;
+      };
+
+      const processCalibration = (iris, now) => {
+        if (!calibrationSamples) {
+          calibrationSamples = { start: now, sumX: 0, sumY: 0, count: 0 };
+        }
+        calibrationSamples.sumX += iris.x;
+        calibrationSamples.sumY += iris.y;
+        calibrationSamples.count += 1;
+        const holdTime = now - calibrationSamples.start;
+        const progress = clamp(holdTime / 800, 0, 1);
+        setRingProgress(progress);
+        if (holdTime >= 800) {
+          const avg = {
+            x: calibrationSamples.sumX / calibrationSamples.count,
+            y: calibrationSamples.sumY / calibrationSamples.count,
+          };
+          calibrationPoints[calibrationStep].iris = avg;
+          calibrationStep += 1;
+          calibrationSamples = null;
+          if (calibrationStep >= calibrationPoints.length) {
+            const irisValues = calibrationPoints.map((point) => point.iris);
+            calibrationBounds = {
+              minX: Math.min(...irisValues.map((p) => p.x)),
+              maxX: Math.max(...irisValues.map((p) => p.x)),
+              minY: Math.min(...irisValues.map((p) => p.y)),
+              maxY: Math.max(...irisValues.map((p) => p.y)),
+            };
+            calibrationActive = false;
+            calibrationEl.classList.add("hidden");
+            setRingProgress(0);
+          } else {
+            updateCalibrationUI();
+          }
+        }
+      };
+
+      const startCalibration = () => {
+        calibrationStep = 0;
+        calibrationActive = true;
+        calibrationSamples = null;
+        calibrationBounds = null;
+        calibrationEl.classList.remove("hidden");
+        updateCalibrationUI();
+      };
+
+      const renderLoop = () => {
+        if (!running || !faceLandmarker) {
+          requestAnimationFrame(renderLoop);
+          return;
+        }
+        const now = performance.now();
+        if (video.readyState >= 2) {
+          const result = faceLandmarker.detectForVideo(video, now);
+          if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+            const landmarks = result.faceLandmarks[0];
+            const leftIris = irisCenter(landmarks, IRIS_INDEXES.left);
+            const rightIris = irisCenter(landmarks, IRIS_INDEXES.right);
+            const iris = {
+              x: (leftIris.x + rightIris.x) / 2,
+              y: (leftIris.y + rightIris.y) / 2,
+            };
+            const ear =
+              (earForEye(landmarks, EYE_INDEXES.left) +
+                earForEye(landmarks, EYE_INDEXES.right)) /
+              2;
+
+            if (calibrationActive) {
+              processCalibration(iris, now);
+            }
+
+            const target = mapToScreen(iris);
+            updateCursor(target.x, target.y);
+            drawDebug(landmarks, leftIris, rightIris);
+
+            if (!calibrationActive) {
+              if (ear < BLINK_EAR_THRESHOLD) {
+                if (!blinkStart) blinkStart = now;
+                const heldFor = now - blinkStart;
+                const progress = clamp(heldFor / BLINK_HOLD_MS, 0, 1);
+                setRingProgress(progress);
+                cursor.classList.add("blink-active");
+                if (
+                  heldFor >= BLINK_HOLD_MS &&
+                  !blinkTriggered &&
+                  now > blinkCooldownUntil
+                ) {
+                  blinkTriggered = true;
+                  blinkCooldownUntil = now + 700;
+                  triggerClick();
+                }
+              } else {
+                blinkStart = null;
+                blinkTriggered = false;
+                setRingProgress(0);
+                cursor.classList.remove("blink-active");
+              }
+            }
+          }
+        }
+        requestAnimationFrame(renderLoop);
+      };
+
+      const initFaceLandmarker = async () => {
+        const filesetResolver = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
+        );
+        faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+            delegate: "GPU",
+          },
+          runningMode: "VIDEO",
+          numFaces: 1,
+          outputFaceBlendshapes: false,
+          outputFacialTransformationMatrixes: false,
+        });
+      };
+
+      const startCamera = async () => {
+        statusEl.textContent = "Requesting camera access...";
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false,
+          });
+          video.srcObject = stream;
+          await video.play();
+          statusEl.textContent = "Tracking active. Blink and hold to click.";
+          if (!faceLandmarker) {
+            await initFaceLandmarker();
+          }
+          running = true;
+          startCalibration();
+        } catch (error) {
+          statusEl.textContent =
+            "Camera permission denied or unavailable. Please allow access to continue.";
+          running = false;
+        }
+      };
+
+      startButton.addEventListener("click", () => {
+        if (!running) startCamera();
+      });
+
+      recalibrateButton.addEventListener("click", () => {
+        if (running) startCalibration();
+      });
+
+      cards.forEach((card) => {
+        card.addEventListener("click", () => {
+          cards.forEach((item) => item.classList.remove("active"));
+          card.classList.add("active");
+        });
+      });
+
+      window.addEventListener("resize", () => {
+        smoothed = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      });
+
+      updateCalibrationUI();
+      renderLoop();
+    </script>
+  </body>
+</html>
