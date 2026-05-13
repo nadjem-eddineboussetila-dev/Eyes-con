@@ -324,14 +324,20 @@
       ring.style.strokeDasharray = `${RING_CIRCUMFERENCE}`;
       ring.style.strokeDashoffset = `${RING_CIRCUMFERENCE}`;
 
-      // Blink detection sensitivity threshold. Lower = more sensitive (may cause false clicks).
+      // Blink detection sensitivity threshold. Typical usable range: 0.20–0.25.
       const BLINK_EAR_THRESHOLD = 0.22;
       // Blink hold time in milliseconds to confirm an intentional click.
       const BLINK_HOLD_MS = 250;
-      // Cursor smoothing factor. Higher = faster response, lower = smoother movement.
+      // Minimum delay between intentional clicks (ms) to avoid double clicks.
+      const BLINK_COOLDOWN_MS = 700;
+      // Cursor smoothing factor. Typical range: 0.12–0.25 (higher = faster response).
       const SMOOTHING_ALPHA = 0.18;
-      // Movement sensitivity multiplier. Higher = larger on-screen movement.
+      // Movement sensitivity multiplier. Typical range: 1.0–1.5 (higher = larger movement).
       const MOVEMENT_SENSITIVITY = 1.25;
+      // Calibration hold time per point (ms) to ensure stable sampling.
+      const CALIBRATION_HOLD_MS = 800;
+      // Visual feedback duration for card activation (ms).
+      const CLICK_FEEDBACK_MS = 300;
 
       const calibrationPoints = [
         { x: 0.1, y: 0.1, label: "Top left" },
@@ -416,7 +422,7 @@
         if (target) {
           target.classList.add("active");
           target.click();
-          setTimeout(() => target.classList.remove("active"), 300);
+          setTimeout(() => target.classList.remove("active"), CLICK_FEEDBACK_MS);
         }
       };
 
@@ -452,9 +458,9 @@
         calibrationSamples.sumY += iris.y;
         calibrationSamples.count += 1;
         const holdTime = now - calibrationSamples.start;
-        const progress = clamp(holdTime / 800, 0, 1);
+        const progress = clamp(holdTime / CALIBRATION_HOLD_MS, 0, 1);
         setRingProgress(progress);
-        if (holdTime >= 800) {
+        if (holdTime >= CALIBRATION_HOLD_MS) {
           const avg = {
             x: calibrationSamples.sumX / calibrationSamples.count,
             y: calibrationSamples.sumY / calibrationSamples.count,
@@ -530,7 +536,7 @@
                   now > blinkCooldownUntil
                 ) {
                   blinkTriggered = true;
-                  blinkCooldownUntil = now + 700;
+                  blinkCooldownUntil = now + BLINK_COOLDOWN_MS;
                   triggerClick();
                 }
               } else {
@@ -552,7 +558,7 @@
         faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
           baseOptions: {
             modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+              "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
             delegate: "GPU",
           },
           runningMode: "VIDEO",
