@@ -135,10 +135,14 @@
         width: 54px;
         height: 54px;
         transform: translate(-50%, -50%);
-        pointer-events: none;
         z-index: 999;
         display: grid;
         place-items: center;
+      }
+
+      #cursor,
+      #cursor * {
+        pointer-events: none;
       }
 
       #cursor svg {
@@ -349,7 +353,7 @@
 
       let faceLandmarker;
       let running = false;
-      let smoothed = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      let smoothedCursorPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       let blinkStart = null;
       let blinkTriggered = false;
       let blinkCooldownUntil = 0;
@@ -358,11 +362,13 @@
       let calibrationSamples = null;
       let calibrationBounds = null;
 
+      // MediaPipe Face Mesh indices for eye contour points used in EAR calculation.
       const EYE_INDEXES = {
         left: [33, 160, 158, 133, 153, 144],
         right: [362, 385, 387, 263, 373, 380],
       };
 
+      // MediaPipe Face Mesh indices for iris landmarks used to locate pupil centers.
       const IRIS_INDEXES = {
         left: [468, 469, 470, 471, 472],
         right: [473, 474, 475, 476, 477],
@@ -387,10 +393,12 @@
       };
 
       const updateCursor = (targetX, targetY) => {
-        smoothed.x = SMOOTHING_ALPHA * targetX + (1 - SMOOTHING_ALPHA) * smoothed.x;
-        smoothed.y = SMOOTHING_ALPHA * targetY + (1 - SMOOTHING_ALPHA) * smoothed.y;
-        cursor.style.left = `${smoothed.x}px`;
-        cursor.style.top = `${smoothed.y}px`;
+        smoothedCursorPosition.x =
+          SMOOTHING_ALPHA * targetX + (1 - SMOOTHING_ALPHA) * smoothedCursorPosition.x;
+        smoothedCursorPosition.y =
+          SMOOTHING_ALPHA * targetY + (1 - SMOOTHING_ALPHA) * smoothedCursorPosition.y;
+        cursor.style.left = `${smoothedCursorPosition.x}px`;
+        cursor.style.top = `${smoothedCursorPosition.y}px`;
       };
 
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -402,8 +410,16 @@
             y: iris.y * window.innerHeight,
           };
         }
-        const nx = (iris.x - calibrationBounds.minX) / (calibrationBounds.maxX - calibrationBounds.minX);
-        const ny = (iris.y - calibrationBounds.minY) / (calibrationBounds.maxY - calibrationBounds.minY);
+        const rangeX = calibrationBounds.maxX - calibrationBounds.minX;
+        const rangeY = calibrationBounds.maxY - calibrationBounds.minY;
+        if (rangeX <= 0 || rangeY <= 0) {
+          return {
+            x: iris.x * window.innerWidth,
+            y: iris.y * window.innerHeight,
+          };
+        }
+        const nx = (iris.x - calibrationBounds.minX) / rangeX;
+        const ny = (iris.y - calibrationBounds.minY) / rangeY;
         const adjustedX = clamp((nx - 0.5) * MOVEMENT_SENSITIVITY + 0.5, 0, 1);
         const adjustedY = clamp((ny - 0.5) * MOVEMENT_SENSITIVITY + 0.5, 0, 1);
         return {
@@ -418,7 +434,10 @@
       };
 
       const triggerClick = () => {
-        const target = document.elementFromPoint(smoothed.x, smoothed.y);
+        const target = document.elementFromPoint(
+          smoothedCursorPosition.x,
+          smoothedCursorPosition.y,
+        );
         if (target) {
           target.classList.add("active");
           target.click();
@@ -564,7 +583,7 @@
           runningMode: "VIDEO",
           numFaces: 1,
           outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false,
+          outputFacialTransformationMatrixes: false, // API uses "Matrixes" naming.
         });
       };
 
@@ -606,7 +625,7 @@
       });
 
       window.addEventListener("resize", () => {
-        smoothed = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        smoothedCursorPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       });
 
       updateCalibrationUI();
