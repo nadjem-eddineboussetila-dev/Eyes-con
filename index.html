@@ -346,6 +346,11 @@
       const VIDEO_WIDTH = 1280;
       const VIDEO_HEIGHT = 720;
 
+      const getViewportSize = () => ({
+        width: window.innerWidth || document.documentElement.clientWidth || 0,
+        height: window.innerHeight || document.documentElement.clientHeight || 0,
+      });
+
       const calibrationPoints = [
         { x: 0.1, y: 0.1, label: "Top left" },
         { x: 0.9, y: 0.1, label: "Top right" },
@@ -356,7 +361,11 @@
 
       let faceLandmarker;
       let running = false;
-      let smoothedCursorPosition = { x: 0, y: 0 };
+      const initialViewport = getViewportSize();
+      let smoothedCursorPosition = {
+        x: initialViewport.width / 2,
+        y: initialViewport.height / 2,
+      };
       let blinkStart = null;
       let blinkTriggered = false;
       let blinkCooldownUntil = 0;
@@ -368,6 +377,7 @@
       let lastVideoTime = -1;
       let activeTarget = null;
       let activeFeedbackTimeout = null;
+      let renderLoopActive = false;
 
       // MediaPipe Face Mesh indices for eye contour points used in EAR calculation.
       const EYE_INDEXES = {
@@ -398,11 +408,6 @@
         );
         return { x: sum.x / points.length, y: sum.y / points.length };
       };
-
-      const getViewportSize = () => ({
-        width: window.innerWidth || document.documentElement.clientWidth || 0,
-        height: window.innerHeight || document.documentElement.clientHeight || 0,
-      });
 
       const resetCursorToCenter = () => {
         const { width, height } = getViewportSize();
@@ -550,7 +555,7 @@
 
       const renderLoop = () => {
         if (!running || !faceLandmarker) {
-          requestAnimationFrame(renderLoop);
+          renderLoopActive = false;
           return;
         }
         const now = performance.now();
@@ -615,6 +620,13 @@
         requestAnimationFrame(renderLoop);
       };
 
+      const startRenderLoop = () => {
+        if (!renderLoopActive) {
+          renderLoopActive = true;
+          requestAnimationFrame(renderLoop);
+        }
+      };
+
       const initFaceLandmarker = async () => {
         const filesetResolver = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
@@ -628,7 +640,7 @@
           runningMode: "VIDEO",
           numFaces: 1,
           outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false, // API property uses "Matrixes" even though plural is "Matrices".
+          outputFacialTransformationMatrixes: false, // Property name is fixed by the MediaPipe API.
         });
       };
 
@@ -652,6 +664,7 @@
           running = true;
           calibrationWarningShown = false;
           startCalibration();
+          startRenderLoop();
         } catch (error) {
           if (error.name === "NotAllowedError" || error.name === "SecurityError") {
             statusEl.textContent = "Camera permission denied. Please allow access.";
@@ -685,7 +698,6 @@
 
       updateCalibrationUI();
       resetCursorToCenter();
-      renderLoop();
     </script>
   </body>
 </html>
