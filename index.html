@@ -342,6 +342,9 @@
       const CALIBRATION_HOLD_MS = 800;
       // Visual feedback duration for card activation (ms).
       const CLICK_FEEDBACK_MS = 300;
+      // Desired camera resolution for tracking (ideal constraints).
+      const VIDEO_WIDTH = 1280;
+      const VIDEO_HEIGHT = 720;
 
       const calibrationPoints = [
         { x: 0.1, y: 0.1, label: "Top left" },
@@ -353,7 +356,7 @@
 
       let faceLandmarker;
       let running = false;
-      let smoothedCursorPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      let smoothedCursorPosition = { x: 0, y: 0 };
       let blinkStart = null;
       let blinkTriggered = false;
       let blinkCooldownUntil = 0;
@@ -390,6 +393,16 @@
           { x: 0, y: 0 },
         );
         return { x: sum.x / points.length, y: sum.y / points.length };
+      };
+
+      const getViewportSize = () => ({
+        width: window.innerWidth || document.documentElement.clientWidth || 0,
+        height: window.innerHeight || document.documentElement.clientHeight || 0,
+      });
+
+      const resetCursorToCenter = () => {
+        const { width, height } = getViewportSize();
+        smoothedCursorPosition = { x: width / 2, y: height / 2 };
       };
 
       const updateCursor = (targetX, targetY) => {
@@ -583,7 +596,7 @@
           runningMode: "VIDEO",
           numFaces: 1,
           outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false, // API uses "Matrixes" naming.
+          outputFacialTransformationMatrixes: false, // API uses "Matrixes" naming even though plural is "Matrices".
         });
       };
 
@@ -591,7 +604,11 @@
         statusEl.textContent = "Requesting camera access...";
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+            video: {
+              facingMode: "user",
+              width: { ideal: VIDEO_WIDTH },
+              height: { ideal: VIDEO_HEIGHT },
+            },
             audio: false,
           });
           video.srcObject = stream;
@@ -624,11 +641,10 @@
         });
       });
 
-      window.addEventListener("resize", () => {
-        smoothedCursorPosition = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-      });
+      window.addEventListener("resize", resetCursorToCenter);
 
       updateCalibrationUI();
+      resetCursorToCenter();
       renderLoop();
     </script>
   </body>
