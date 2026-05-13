@@ -364,6 +364,10 @@
       let calibrationActive = true;
       let calibrationSamples = null;
       let calibrationBounds = null;
+      let calibrationWarningShown = false;
+      let lastVideoTime = -1;
+      let activeTarget = null;
+      let activeFeedbackTimeout = null;
 
       // MediaPipe Face Mesh indices for eye contour points used in EAR calculation.
       const EYE_INDEXES = {
@@ -426,6 +430,11 @@
         const rangeX = calibrationBounds.maxX - calibrationBounds.minX;
         const rangeY = calibrationBounds.maxY - calibrationBounds.minY;
         if (rangeX <= 0 || rangeY <= 0) {
+          if (!calibrationWarningShown) {
+            statusEl.textContent =
+              "Calibration data was unstable. Using raw tracking until recalibrated.";
+            calibrationWarningShown = true;
+          }
           return {
             x: iris.x * window.innerWidth,
             y: iris.y * window.innerHeight,
@@ -452,9 +461,21 @@
           smoothedCursorPosition.y,
         );
         if (target) {
+          if (activeTarget) {
+            activeTarget.classList.remove("active");
+          }
+          if (activeFeedbackTimeout) {
+            clearTimeout(activeFeedbackTimeout);
+          }
+          activeTarget = target;
           target.classList.add("active");
           target.click();
-          setTimeout(() => target.classList.remove("active"), CLICK_FEEDBACK_MS);
+          activeFeedbackTimeout = setTimeout(() => {
+            if (activeTarget === target) {
+              target.classList.remove("active");
+              activeTarget = null;
+            }
+          }, CLICK_FEEDBACK_MS);
         }
       };
 
@@ -522,6 +543,7 @@
         calibrationActive = true;
         calibrationSamples = null;
         calibrationBounds = null;
+        calibrationWarningShown = false;
         calibrationEl.classList.remove("hidden");
         updateCalibrationUI();
       };
@@ -533,8 +555,18 @@
         }
         const now = performance.now();
         if (video.readyState >= 2) {
-          const result = faceLandmarker.detectForVideo(video, now);
-          if (result.faceLandmarks && result.faceLandmarks.length > 0) {
+          let result = null;
+          if (video.currentTime !== lastVideoTime) {
+            lastVideoTime = video.currentTime;
+            try {
+              result = faceLandmarker.detectForVideo(video, now);
+            } catch (error) {
+              statusEl.textContent =
+                "Tracking error detected. Refresh the page or recalibrate.";
+              result = null;
+            }
+          }
+          if (result && result.faceLandmarks && result.faceLandmarks.length > 0) {
             const landmarks = result.faceLandmarks[0];
             const leftIris = irisCenter(landmarks, IRIS_INDEXES.left);
             const rightIris = irisCenter(landmarks, IRIS_INDEXES.right);
@@ -596,7 +628,7 @@
           runningMode: "VIDEO",
           numFaces: 1,
           outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false, // API uses "Matrixes" naming even though plural is "Matrices".
+          outputFacialTransformationMatrixes: false, // API property uses "Matrixes" even though plural is "Matrices".
         });
       };
 
@@ -618,10 +650,18 @@
             await initFaceLandmarker();
           }
           running = true;
+          calibrationWarningShown = false;
           startCalibration();
         } catch (error) {
-          statusEl.textContent =
-            "Camera permission denied or unavailable. Please allow access to continue.";
+          if (error.name === "NotAllowedError" || error.name === "SecurityError") {
+            statusEl.textContent = "Camera permission denied. Please allow access.";
+          } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+            statusEl.textContent = "No camera found. Connect a camera and retry.";
+          } else if (error.name === "NotReadableError") {
+            statusEl.textContent = "Camera is already in use by another app.";
+          } else {
+            statusEl.textContent = "Camera unavailable. Please check device settings.";
+          }
           running = false;
         }
       };
