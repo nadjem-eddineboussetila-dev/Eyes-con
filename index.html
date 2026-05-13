@@ -566,6 +566,7 @@
             try {
               result = faceLandmarker.detectForVideo(video, now);
             } catch (error) {
+              console.error("Face tracking error:", error);
               statusEl.textContent =
                 "Tracking error detected. Refresh the page or recalibrate.";
               result = null;
@@ -640,7 +641,7 @@
           runningMode: "VIDEO",
           numFaces: 1,
           outputFaceBlendshapes: false,
-          outputFacialTransformationMatrixes: false, // Property name is fixed by the MediaPipe API.
+          outputFacialTransformationMatrixes: false,
         });
       };
 
@@ -666,6 +667,7 @@
           startCalibration();
           startRenderLoop();
         } catch (error) {
+          console.error("Camera initialization error:", error);
           if (error.name === "NotAllowedError" || error.name === "SecurityError") {
             statusEl.textContent = "Camera permission denied. Please allow access.";
           } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
